@@ -1,18 +1,22 @@
 #!/bin/bash
 
-ROOT=$(dirname "$0")
-cd "$ROOT" || exit 1
+ROOT=$(dirname $0)
+cd "$ROOT"
 
 echo "Building project..."
 mvn clean package || exit 1
 
-SERVICE_NAME="yandex-ml-service"
+SERVICE_NAME=mlp-java-hello-world-service
 BUILD_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-BRANCH_NAME_LOWER=$(echo "$BUILD_BRANCH" | tr '[:upper:]' '[:lower:]')
+BRANCH_NAME_LOWER=`echo $BUILD_BRANCH | tr '[:upper:]' '[:lower:]'`
 
-SECRET=$(LC_CTYPE=C tr -dc 'a-z0-9' </dev/urandom | head -c 24)
+SECRET_FILE=~/.mlp-secret-$SERVICE_NAME
+if [[ ! -e $SECRET_FILE ]]; then
+    echo $(tr -dc a-z0-9 </dev/urandom | head -c 24) > $SECRET_FILE
+fi
+SECRET=$(cat $SECRET_FILE)
 
-IMAGE=docker-pub.caila.io/caila-public/"$SERVICE_NAME"-"$SECRET":"$BRANCH_NAME_LOWER"
+IMAGE=docker-pub.caila.io/caila-public/$SERVICE_NAME-$SECRET:$BRANCH_NAME_LOWER
 
 DOCKER_BUILDKIT=1 docker build . -t "$IMAGE"
 
@@ -22,5 +26,5 @@ docker login docker-pub.caila.io -u 'robot$caila-public' -p 'gaerrvb54zjvRx8klac
 docker push "$IMAGE"
 
 echo --------------------------------------------------
-echo Docker image: "$IMAGE"
+echo Docker image: $IMAGE
 echo --------------------------------------------------
