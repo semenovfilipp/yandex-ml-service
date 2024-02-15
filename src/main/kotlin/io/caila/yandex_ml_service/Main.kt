@@ -28,9 +28,8 @@ class Main(req: ChatCompletionRequest, response: ChatCompletionResult) :
 }
 
 fun main() {
-    fun main() {
-        val actionSDK = MlpServiceSDK()
-        actionSDK.start()
-        actionSDK.blockUntilShutdown()
-    }
+    val actionSDK = MlpServiceSDK()
+    actionSDK.start()
+    actionSDK.blockUntilShutdown()
+
 }
