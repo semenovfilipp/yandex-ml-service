@@ -39,7 +39,7 @@
     - [Описание SDK сервиса MLP](docs/MlpServiceSDK.md)
 
 13. **MlpService vs MlpServiceSDK**
-    - [Сравнение сервиса MLP и его SDK](docs/MlpService vs MlpServiceSDK.md)
+    - [Сравнение сервиса MLP и его SDK](docs/MlpService%20vs%20MlpServiceSDK.md)
 
 14. **Payload**
     - [Описание полезной нагрузки](docs/Payload.md)
