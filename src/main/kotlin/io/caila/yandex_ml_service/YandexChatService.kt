@@ -2,19 +2,16 @@ package io.caila.yandex_ml_service
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.mlp.sdk.MlpPredictServiceBase
-import com.mlp.sdk.MlpServiceSDK
 import com.mlp.sdk.datatypes.chatgpt.ChatCompletionRequest
-import com.mlp.sdk.datatypes.chatgpt.ChatCompletionResult
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 
+
 /*
-     Задачи:
-    1. Сделать обработку получаемых role (user, system)
+ * Сервисные конфигурации для доступа к YandexGPT
  */
 
 data class InitConfig(
@@ -23,6 +20,9 @@ data class InitConfig(
     val modelUri: String = "gpt://b1gqi77kftnmedl1qn05/yandexgpt-lite"
 )
 
+/*
+ * Опциональные конфигурации для настройки запроса к YandexGPT
+ */
 data class PredictConfig(
     val maxTokens: String = "2000",
     val temperature: Double = 0.6,
@@ -30,10 +30,10 @@ data class PredictConfig(
 )
 
 
-class YandexChatService(req: ChatCompletionRequest, response: ChatCompletionResult) :
-    MlpPredictServiceBase <ChatCompletionRequest, ChatCompletionResult>(req, response) {
+class YandexChatService() {
     private val initConfig = InitConfig()
     private val predictConfig = PredictConfig()
+
     private val httpClient = OkHttpClient()
     private val objectMapper = ObjectMapper()
 
@@ -100,23 +100,5 @@ class YandexChatService(req: ChatCompletionRequest, response: ChatCompletionResu
         val rootNode: JsonNode = objectMapper.readTree(responseData)
         return rootNode["result"]?.get("alternatives")?.firstOrNull()?.get("message")?.get("text")?.asText() ?: ""
     }
-
-    override fun predict(req: ChatCompletionRequest): ChatCompletionResult {
-        val message = sendMessageToYandex(req)
-        val result = ChatCompletionResult(
-            null,
-            message,
-            created = System.currentTimeMillis(),
-            "",
-            emptyList(),
-            null
-        )
-        return result
-    }
 }
-fun main() {
-    val actionSDK = MlpServiceSDK(YandexChatService::javaClass)
-    actionSDK.start()
-    actionSDK.blockUntilShutdown()
 
-}
