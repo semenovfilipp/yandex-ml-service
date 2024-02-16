@@ -2,7 +2,10 @@ package io.caila.yandex_ml_service
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.mlp.sdk.MlpPredictServiceBase
+import com.mlp.sdk.MlpServiceSDK
 import com.mlp.sdk.datatypes.chatgpt.ChatCompletionRequest
+import com.mlp.sdk.datatypes.chatgpt.ChatCompletionResult
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -27,7 +30,10 @@ data class PredictConfig(
 )
 
 
-class YandexChatService(private val initConfig: InitConfig, private val predictConfig: PredictConfig) {
+class YandexChatService(req: ChatCompletionRequest, response: ChatCompletionResult) :
+    MlpPredictServiceBase <ChatCompletionRequest, ChatCompletionResult>(req, response) {
+    private val initConfig = InitConfig()
+    private val predictConfig = PredictConfig()
     private val httpClient = OkHttpClient()
     private val objectMapper = ObjectMapper()
 
@@ -94,4 +100,23 @@ class YandexChatService(private val initConfig: InitConfig, private val predictC
         val rootNode: JsonNode = objectMapper.readTree(responseData)
         return rootNode["result"]?.get("alternatives")?.firstOrNull()?.get("message")?.get("text")?.asText() ?: ""
     }
+
+    override fun predict(req: ChatCompletionRequest): ChatCompletionResult {
+        val message = sendMessageToYandex(req)
+        val result = ChatCompletionResult(
+            null,
+            message,
+            created = System.currentTimeMillis(),
+            "",
+            emptyList(),
+            null
+        )
+        return result
+    }
+}
+fun main() {
+    val actionSDK = MlpServiceSDK(YandexChatService::javaClass)
+    actionSDK.start()
+    actionSDK.blockUntilShutdown()
+
 }
