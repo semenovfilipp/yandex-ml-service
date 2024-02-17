@@ -15,7 +15,7 @@ import java.io.IOException
  */
 
 data class InitConfig(
-    val iAmToken: String = "t1.9euelZqTio_Jx5qRxoyNlpKTnZCJyO3rnpWazZ3LnpyOz8qdlo-dzJPJlpTl8_dzeEtR-e9EYU8H_t3z9zMnSVH570RhTwf-zef1656Vms3Iy5eYm4zJkZWanZXPj4nJ7_zF656Vms3Iy5eYm4zJkZWanZXPj4nJ.XsKZeO8AIulap8nWyBZAR3LRIGOdSIP1btOt8UbfZ44hBFGzKqLewnkSLwrFIPuQKDFeOe6BKT-VpeEO_qTrAg",
+    val iAmToken: String = "t1.9euelZqJmczMlciKns_Hl46azJidze3rnpWazZ3LnpyOz8qdlo-dzJPJlpTl8_dSQDxR-e9VIDJR_d3z9xJvOVH571UgMlH9zef1656VmpWVxpaKk8-RksueypfGjZSS7_zF656VmpWVxpaKk8-RksueypfGjZSS.P02VN3gNG7gCOrjjTcnyPE4Bd4zTUYxrbmt9WA7QruoWh8Og1QFEinOwYMw-4wCTYuLTkVfvW_lmna79QCypDQ",
     val xFolderId: String = "b1gqi77kftnmedl1qn05",
     val modelUri: String = "gpt://b1gqi77kftnmedl1qn05/yandexgpt-lite"
 )
@@ -44,7 +44,7 @@ class YandexChatService() {
     private fun createRequestBody(req: ChatCompletionRequest): String {
         val messages = req.messages.map { message ->
             mapOf(
-                "role" to message.role,
+                "role" to message.role.toString().lowercase(),
                 "text" to message.content
             )
         }
@@ -98,7 +98,8 @@ class YandexChatService() {
      */
     private fun parseCompletionText(responseData: String?): String {
         val rootNode: JsonNode = objectMapper.readTree(responseData)
-        return rootNode["result"]?.get("alternatives")?.firstOrNull()?.get("message")?.get("text")?.asText() ?: ""
+        val messageNode = rootNode["result"]?.get("alternatives")?.firstOrNull()?.get("message")
+        return messageNode?.get("text")?.asText() ?: "empty text"
     }
 }
 
