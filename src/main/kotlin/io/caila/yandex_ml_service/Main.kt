@@ -21,8 +21,8 @@ class Main(
             id = null,
             `object` = objectMapper.writeValueAsString(resultResponse),
             created = System.currentTimeMillis(),
-            model = resultResponse.result.modelVersion, // Используем версию модели из ResultResponse
-            choices = listOf(resultResponse.result.alternatives.firstOrNull()), // Используем первую альтернативу из ResultResponse
+            model = resultResponse.result.modelVersion,
+            choices = listOf(resultResponse.result.alternatives.firstOrNull()),
             usage = resultResponse.result.usage
         )
     }
