@@ -1,5 +1,6 @@
 package io.caila.yandex_ml_service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.mlp.sdk.MlpExecutionContext
 import com.mlp.sdk.MlpPredictServiceBase
 import com.mlp.sdk.MlpServiceSDK
@@ -13,15 +14,16 @@ class Main(
     private val yandexChatService = YandexChatService()
 
     override fun predict(req: ChatCompletionRequest): ChatCompletionResult {
-        val message = yandexChatService.sendMessageToYandex(req)
+        val resultResponse = yandexChatService.sendMessageToYandex(req)
+        val objectMapper = ObjectMapper()
 
         return ChatCompletionResult(
-            null,
-            message,
+            id = null,
+            `object` = objectMapper.writeValueAsString(resultResponse),
             created = System.currentTimeMillis(),
-            "",
-            emptyList(),
-            null
+            model = resultResponse.result.modelVersion, // Используем версию модели из ResultResponse
+            choices = listOf(resultResponse.result.alternatives.firstOrNull()), // Используем первую альтернативу из ResultResponse
+            usage = resultResponse.result.usage
         )
     }
 

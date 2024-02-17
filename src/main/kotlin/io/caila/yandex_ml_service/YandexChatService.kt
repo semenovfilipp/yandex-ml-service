@@ -3,11 +3,24 @@ package io.caila.yandex_ml_service
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mlp.sdk.datatypes.chatgpt.ChatCompletionRequest
+import io.caila.yandex_ml_service.Result
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+
+
+
+/*
+ * Дата классы для принятия JSON из YandexGPT
+ */
+data class ResultResponse(val result: io.caila.yandex_ml_service.Result)
+data class Result(val alternatives: List<Alternatives>, val usage: Usage, val modelVersion : String)
+data class Message(val role: String, val text: String)
+data class Alternatives(val message: Message, val status : String)
+data class Usage(val inputTextTokens : String?, val completionTokens: String?, val totalTokens: String?)
+
 
 
 /*
@@ -78,7 +91,7 @@ class YandexChatService() {
      *  Отправление запроса на сервер Yandex
      */
 
-    fun sendMessageToYandex(req: ChatCompletionRequest): String {
+    fun sendMessageToYandex(req: ChatCompletionRequest): ResultResponse {
         val requestBody = createRequestBody(req)
         val request = createRequest(requestBody)
 
@@ -88,18 +101,41 @@ class YandexChatService() {
         }
 
         val responseData = response.body?.string()
-        val completionText = parseCompletionText(responseData)
-        return completionText
+        return parseCompletionText(responseData)
     }
 
     /*
      * Разбор JSON ответа
      * Забираем только данные из поля "text"
      */
-    private fun parseCompletionText(responseData: String?): String {
-        val rootNode: JsonNode = objectMapper.readTree(responseData)
-        val messageNode = rootNode["result"]?.get("alternatives")?.firstOrNull()?.get("message")
-        return messageNode?.get("text")?.asText() ?: "empty text"
+    private fun parseCompletionText(responseData: String?): ResultResponse {
+       val rootNode : JsonNode = objectMapper.readTree(responseData)
+        val alternativesNode = rootNode["result"].get("alternatives")
+        val usageNode = rootNode["result"].get("usage")
+        val modelVersion = rootNode["result"].get("modelVersion").asText() ?: ""
+
+        val message = Message(
+            role = alternativesNode["message"]?.get("role")?.asText() ?: "",
+            text = alternativesNode["message"]?.get("text")?.asText() ?: ""
+        )
+
+        val alternative = Alternatives(
+            message = message,
+            status = alternativesNode?.get("status")?.asText() ?: ""
+        )
+
+        val usage = Usage(
+            inputTextTokens = usageNode?.get("inputTextTokens")?.asText() ?: "",
+            completionTokens = usageNode?.get("completionTokens")?.asText() ?: "",
+            totalTokens = usageNode?.get("totalTokens")?.asText() ?: ""
+        )
+
+        val result = Result(
+            alternatives = listOf(alternative),
+            usage = usage,
+            modelVersion = modelVersion
+        )
+        return ResultResponse(result)
     }
 }
 
