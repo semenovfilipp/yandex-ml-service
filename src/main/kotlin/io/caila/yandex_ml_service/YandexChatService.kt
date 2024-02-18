@@ -3,7 +3,6 @@ package io.caila.yandex_ml_service
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mlp.sdk.datatypes.chatgpt.ChatCompletionRequest
-import io.caila.yandex_ml_service.Result
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -28,7 +27,7 @@ data class Usage(val inputTextTokens : String?, val completionTokens: String?, v
  */
 
 data class InitConfig(
-    val iAmToken: String = "t1.9euelZqJmczMlciKns_Hl46azJidze3rnpWazZ3LnpyOz8qdlo-dzJPJlpTl8_dSQDxR-e9VIDJR_d3z9xJvOVH571UgMlH9zef1656VmpWVxpaKk8-RksueypfGjZSS7_zF656VmpWVxpaKk8-RksueypfGjZSS.P02VN3gNG7gCOrjjTcnyPE4Bd4zTUYxrbmt9WA7QruoWh8Og1QFEinOwYMw-4wCTYuLTkVfvW_lmna79QCypDQ",
+    val iAmToken: String = "t1.9euelZqKx8qdjZCQlsuZl5KXmZzMi-3rnpWazZ3LnpyOz8qdlo-dzJPJlpTl9PdQRjdR-e9PXRbQ3fT3EHU0UfnvT10W0M3n9euelZrPlZLJi8iTzprKyMyQx42JlO_8xeuelZrPlZLJi8iTzprKyMyQx42JlA.PfPCz2dpZfqHLGlQcjHNle6-fPCGqVYsk7XJ8YynB3_ZQSsYqhVE400OE02RDF1bIYG3KxPS5b_gbbuMQtBbDA",
     val xFolderId: String = "b1gqi77kftnmedl1qn05",
     val modelUri: String = "gpt://b1gqi77kftnmedl1qn05/yandexgpt-lite"
 )
@@ -106,17 +105,16 @@ class YandexChatService() {
 
     /*
      * Разбор JSON ответа
-     * Забираем только данные из поля "text"
      */
     private fun parseCompletionText(responseData: String?): ResultResponse {
-       val rootNode : JsonNode = objectMapper.readTree(responseData)
-        val alternativesNode = rootNode["result"].get("alternatives")
+        val rootNode: JsonNode = objectMapper.readTree(responseData)
+        val alternativesNode = rootNode["result"].get("alternatives").firstOrNull()
         val usageNode = rootNode["result"].get("usage")
         val modelVersion = rootNode["result"].get("modelVersion").asText() ?: ""
 
         val message = Message(
-            role = alternativesNode["message"]?.get("role")?.asText() ?: "",
-            text = alternativesNode["message"]?.get("text")?.asText() ?: ""
+            role = alternativesNode?.get("message")?.get("role")?.asText() ?: "",
+            text = alternativesNode?.get("message")?.get("text")?.asText() ?: ""
         )
 
         val alternative = Alternatives(
@@ -135,7 +133,9 @@ class YandexChatService() {
             usage = usage,
             modelVersion = modelVersion
         )
+
         return ResultResponse(result)
     }
 }
+
 

@@ -4,8 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.mlp.sdk.MlpExecutionContext
 import com.mlp.sdk.MlpPredictServiceBase
 import com.mlp.sdk.MlpServiceSDK
-import com.mlp.sdk.datatypes.chatgpt.ChatCompletionRequest
-import com.mlp.sdk.datatypes.chatgpt.ChatCompletionResult
+import com.mlp.sdk.datatypes.chatgpt.*
 
 class Main(
     override val context: MlpExecutionContext
@@ -17,15 +16,41 @@ class Main(
         val resultResponse = yandexChatService.sendMessageToYandex(req)
         val objectMapper = ObjectMapper()
 
+        val choices = resultResponse.result.alternatives.mapIndexed { index, alternative ->
+            val chatMessage = ChatMessage(
+                role = try {
+                    ChatCompletionRole.valueOf(alternative.message.role.lowercase())
+                } catch (e: Exception) {
+                    ChatCompletionRole.assistant
+                },
+                content = alternative.message.text
+            )
+
+            ChatCompletionChoice(
+                index = index,
+                message = chatMessage,
+                finishReason = null
+            )
+        }
+
+
+        val usage = resultResponse.result.usage.inputTextTokens?.let {
+            Usage(
+                promptTokens = resultResponse.result.usage.inputTextTokens.toLong(),
+                completionTokens = resultResponse.result.usage.completionTokens?.toLong() ?: 0L,
+                totalTokens = resultResponse.result.usage.totalTokens?.toLong() ?: 0L
+            )
+        }
         return ChatCompletionResult(
             id = null,
-            `object` = objectMapper.writeValueAsString(resultResponse),
+            `object` = null,
             created = System.currentTimeMillis(),
             model = resultResponse.result.modelVersion,
-            choices = listOf(resultResponse.result.alternatives.firstOrNull()),
-            usage = resultResponse.result.usage
+            choices = choices,
+            usage = usage
         )
     }
+
 
     companion object {
         val REQUEST_EXAMPLE = ChatCompletionRequest(
