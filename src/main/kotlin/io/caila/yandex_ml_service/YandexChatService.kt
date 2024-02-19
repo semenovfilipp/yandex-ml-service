@@ -3,6 +3,7 @@ package io.caila.yandex_ml_service
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mlp.sdk.datatypes.chatgpt.ChatCompletionRequest
+import com.mlp.sdk.utils.JSON
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -24,12 +25,7 @@ data class Usage(val inputTextTokens: String?, val completionTokens: String?, va
  * Сервисные конфигурации для доступа к YandexGPT
  */
 
-data class InitConfig(
-    var iAmToken: String = "",
-    val xFolderId: String = "b1gqi77kftnmedl1qn05",
-    val modelUri: String = "gpt://b1gqi77kftnmedl1qn05/yandexgpt-lite",
-    val oauthToken: String = "y0_AgAAAAALm-BfAATuwQAAAAD7BME3AADWJfItliJJFrhlNCcuFlgwILxxCg"
-)
+data class InitConfig(var iAmToken: String, val xFolderId: String, val modelUri: String, val oauthToken: String)
 
 /*
  * Опциональные конфигурации для настройки запроса к YandexGPT
@@ -40,13 +36,14 @@ data class PredictConfig(
 
 
 class YandexChatService {
-    private val initConfig = InitConfig()
     private val predictConfig = PredictConfig()
 
     private val httpClient = OkHttpClient()
     private val objectMapper = ObjectMapper()
 
     private var tokenExpirationTime: Long = System.currentTimeMillis() + 12 * 60 * 60 * 1000
+
+    private val initConfig = JSON.parse(System.getenv().get("SERVICE_CONFIG") ?: "{}", InitConfig::class.java)
 
 
     /*
