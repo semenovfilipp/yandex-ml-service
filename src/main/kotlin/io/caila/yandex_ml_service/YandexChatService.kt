@@ -10,16 +10,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 
 
-
 /*
  * Дата классы для принятия JSON из YandexGPT
  */
-data class ResultResponse(val result: io.caila.yandex_ml_service.Result)
-data class Result(val alternatives: List<Alternatives>, val usage: Usage, val modelVersion : String)
+data class ResultResponse(val result: Result)
+data class Result(val alternatives: List<Alternatives>, val usage: Usage, val modelVersion: String)
 data class Message(val role: String, val text: String)
-data class Alternatives(val message: Message, val status : String)
-data class Usage(val inputTextTokens : String?, val completionTokens: String?, val totalTokens: String?)
-
+data class Alternatives(val message: Message, val status: String)
+data class Usage(val inputTextTokens: String?, val completionTokens: String?, val totalTokens: String?)
 
 
 /*
@@ -27,27 +25,29 @@ data class Usage(val inputTextTokens : String?, val completionTokens: String?, v
  */
 
 data class InitConfig(
-    val iAmToken: String = "t1.9euelZqKx8qdjZCQlsuZl5KXmZzMi-3rnpWazZ3LnpyOz8qdlo-dzJPJlpTl9PdQRjdR-e9PXRbQ3fT3EHU0UfnvT10W0M3n9euelZrPlZLJi8iTzprKyMyQx42JlO_8xeuelZrPlZLJi8iTzprKyMyQx42JlA.PfPCz2dpZfqHLGlQcjHNle6-fPCGqVYsk7XJ8YynB3_ZQSsYqhVE400OE02RDF1bIYG3KxPS5b_gbbuMQtBbDA",
+    var iAmToken: String = "",
     val xFolderId: String = "b1gqi77kftnmedl1qn05",
-    val modelUri: String = "gpt://b1gqi77kftnmedl1qn05/yandexgpt-lite"
+    val modelUri: String = "gpt://b1gqi77kftnmedl1qn05/yandexgpt-lite",
+    val oauthToken: String = "y0_AgAAAAALm-BfAATuwQAAAAD7BME3AADWJfItliJJFrhlNCcuFlgwILxxCg"
 )
 
 /*
  * Опциональные конфигурации для настройки запроса к YandexGPT
  */
 data class PredictConfig(
-    val maxTokens: String = "2000",
-    val temperature: Double = 0.6,
-    val stream: Boolean = false
+    val maxTokens: String = "2000", val temperature: Double = 0.6, val stream: Boolean = false
 )
 
 
-class YandexChatService() {
+class YandexChatService {
     private val initConfig = InitConfig()
     private val predictConfig = PredictConfig()
 
     private val httpClient = OkHttpClient()
     private val objectMapper = ObjectMapper()
+
+    private var tokenExpirationTime: Long = System.currentTimeMillis() + 12 * 60 * 60 * 1000
+
 
     /*
      * Создание JSON
@@ -56,19 +56,16 @@ class YandexChatService() {
     private fun createRequestBody(req: ChatCompletionRequest): String {
         val messages = req.messages.map { message ->
             mapOf(
-                "role" to message.role.toString().lowercase(),
-                "text" to message.content
+                "role" to message.role.toString().lowercase(), "text" to message.content
             )
         }
 
         val jsonBody = mapOf(
-            "modelUri" to initConfig.modelUri,
-            "completionOptions" to mapOf(
+            "modelUri" to initConfig.modelUri, "completionOptions" to mapOf(
                 "stream" to predictConfig.stream,
                 "temperature" to predictConfig.temperature,
                 "maxTokens" to predictConfig.maxTokens
-            ),
-            "messages" to messages
+            ), "messages" to messages
         )
 
         return objectMapper.writeValueAsString(jsonBody)
@@ -78,12 +75,9 @@ class YandexChatService() {
      * Создание HTTP-запроса с заголовками и телом запроса
      */
     private fun createRequest(requestBody: String): Request {
-        return Request.Builder()
-            .url("https://llm.api.cloud.yandex.net/foundationModels/v1/completion")
-            .header("Authorization", "Bearer ${initConfig.iAmToken}")
-            .header("x-folder-id", initConfig.xFolderId)
-            .post(requestBody.toRequestBody("application/json".toMediaType()))
-            .build()
+        return Request.Builder().url("https://llm.api.cloud.yandex.net/foundationModels/v1/completion")
+            .header("Authorization", "Bearer ${initConfig.iAmToken}").header("x-folder-id", initConfig.xFolderId)
+            .post(requestBody.toRequestBody("application/json".toMediaType())).build()
     }
 
     /*
@@ -91,6 +85,7 @@ class YandexChatService() {
      */
 
     fun sendMessageToYandex(req: ChatCompletionRequest): ResultResponse {
+        updateIamToken()
         val requestBody = createRequestBody(req)
         val request = createRequest(requestBody)
 
@@ -118,8 +113,7 @@ class YandexChatService() {
         )
 
         val alternative = Alternatives(
-            message = message,
-            status = alternativesNode?.get("status")?.asText() ?: ""
+            message = message, status = alternativesNode?.get("status")?.asText() ?: ""
         )
 
         val usage = Usage(
@@ -129,12 +123,55 @@ class YandexChatService() {
         )
 
         val result = Result(
-            alternatives = listOf(alternative),
-            usage = usage,
-            modelVersion = modelVersion
+            alternatives = listOf(alternative), usage = usage, modelVersion = modelVersion
         )
 
         return ResultResponse(result)
+    }
+
+    /*
+     * Обновление iamToken каждые 12 часов
+     */
+    private fun updateIamToken() {
+        if (System.currentTimeMillis() >= tokenExpirationTime || initConfig.iAmToken == "") {
+            val newToken = getNewIamToken(initConfig.oauthToken)
+            initConfig.iAmToken = newToken
+            tokenExpirationTime = System.currentTimeMillis() + 12 * 60 * 60 * 1000
+        }
+    }
+
+    /*
+     * Запрос на обновление iamToken
+     */
+    private fun getNewIamToken(oauthToken: String): String {
+        val client = OkHttpClient()
+        val requestBody = "{\"yandexPassportOauthToken\":\"$oauthToken\"}"
+        val request = Request.Builder()
+            .url("https://iam.api.cloud.yandex.net/iam/v1/tokens")
+            .post(requestBody.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw IOException("Failed to retrieve new IAM token: ${response.code} - ${response.message}")
+        }
+
+        val responseData = response.body?.string()
+        return parseNewToken(responseData)
+    }
+
+
+    /*
+     * Парсинг полученного iamToken
+     */
+    private fun parseNewToken(responseData: String?): String {
+        responseData ?: throw IOException("Failed to parse new IAM token: response data is null")
+
+        val objectMapper = ObjectMapper()
+        val rootNode = objectMapper.readTree(responseData)
+
+        return rootNode["iamToken"]?.asText()
+            ?: throw IOException("Failed to parse IAM token from response")
     }
 }
 
