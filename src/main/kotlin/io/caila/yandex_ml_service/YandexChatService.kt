@@ -53,15 +53,20 @@ class YandexChatService {
     private fun createRequestBody(req: ChatCompletionRequest): String {
         val messages = req.messages.map { message ->
             mapOf(
-                "role" to message.role.toString().lowercase(), "text" to message.content
+                "role" to message.role.toString().lowercase(),
+                "text" to message.content
             )
         }
+        val maxTokens = req.maxTokens ?: predictConfig.maxTokens
+        val temperature = req.temperature ?: predictConfig.temperature
+        val stream = req.stream ?: predictConfig.stream
+
 
         val jsonBody = mapOf(
             "modelUri" to initConfig.modelUri, "completionOptions" to mapOf(
-                "stream" to predictConfig.stream,
-                "temperature" to predictConfig.temperature,
-                "maxTokens" to predictConfig.maxTokens
+                "stream" to stream,
+                "temperature" to temperature,
+                "maxTokens" to maxTokens
             ), "messages" to messages
         )
 
