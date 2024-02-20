@@ -2,6 +2,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
+/*
+ * Создание запроса для YandexGPT
+ */
 object YandexRequestBuilder {
     private val MEDIA_TYPE_JSON = "application/json".toMediaType()
 

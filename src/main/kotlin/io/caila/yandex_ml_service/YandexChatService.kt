@@ -76,7 +76,7 @@ class YandexChatService {
     }
 
     /*
-     * Отправка запроса на сервер Yandex
+     * Отправление запроса на сервер Yandex
      */
     fun sendMessageToYandex(req: ChatCompletionRequest): ResultResponse {
         updateIamToken()

@@ -3,6 +3,10 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.caila.yandex_ml_service.*
 import io.caila.yandex_ml_service.exception.ParsingException
 
+
+/*
+ * Парсинг JSON полученного из YandexGPT
+ */
 object YandexResponseParser {
     private val objectMapper = ObjectMapper()
 
