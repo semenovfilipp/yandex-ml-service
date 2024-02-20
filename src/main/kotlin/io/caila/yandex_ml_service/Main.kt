@@ -1,10 +1,10 @@
 package io.caila.yandex_ml_service
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.mlp.sdk.MlpExecutionContext
 import com.mlp.sdk.MlpPredictServiceBase
 import com.mlp.sdk.MlpServiceSDK
 import com.mlp.sdk.datatypes.chatgpt.*
+import com.mlp.sdk.datatypes.chatgpt.Usage
 
 class Main(
     override val context: MlpExecutionContext
@@ -14,7 +14,6 @@ class Main(
 
     override fun predict(req: ChatCompletionRequest): ChatCompletionResult {
         val resultResponse = yandexChatService.sendMessageToYandex(req)
-        val objectMapper = ObjectMapper()
 
         val choices = resultResponse.result.alternatives.mapIndexed { index, alternative ->
             val chatMessage = ChatMessage(
