@@ -80,13 +80,16 @@ class YandexGPTService(
             )
         }
 
-//        BillingUnitsThreadLocal.setUnits(...)
+        val totalTokens = resultResponse.usage.totalTokens!!.toDouble()
+        val totalCost = (totalTokens * 1.0 * (0.40 / 1000.0)).toLong()
+
+        BillingUnitsThreadLocal.setUnits(totalCost)
 
         val usage = resultResponse.usage.inputTextTokens?.let {
             Usage(
                 promptTokens = resultResponse.usage.inputTextTokens.toLong(),
                 completionTokens = resultResponse.usage.completionTokens?.toLong() ?: 0L,
-                totalTokens = resultResponse.usage.totalTokens?.toLong() ?: 0L
+                totalTokens = resultResponse.usage.totalTokens.toLong()
             )
         }
         return ChatCompletionResult(
