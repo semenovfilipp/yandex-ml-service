@@ -44,12 +44,25 @@ class YandexGPTService(
                 stream = false
             ),
             messages =
-            listOf(
-                YandexChatMessage(
-                    role = if (defaultPredictConfig.systemPrompt!=null)  ChatCompletionRole.system.toString() else request.messages.first().role.toString() ,
-                    text = request.messages.first().content
-                )
-            )
+                request.messages.map{message ->
+                    YandexChatMessage(
+                        role = message.role.toString(),
+                        text = message.content
+                    )
+                }
+//            messages =
+//            request.messages.map { message ->
+//                val role: String
+//                val text: String
+//                if (defaultPredictConfig.systemPrompt != null) {
+//                    role = ChatCompletionRole.system.toString()
+//                    text = defaultPredictConfig.systemPrompt
+//                } else {
+//                    role = ChatCompletionRole.user.toString()
+//                    text = message.content
+//                }
+//                YandexChatMessage(role = role, text = text)
+//            }
         )
 
         val resultResponse = connector.sendMessageToYandex(yandexChatRequest)

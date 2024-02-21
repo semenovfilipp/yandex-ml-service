@@ -46,7 +46,7 @@ class YandexChatConnector(val initConfig: InitConfig) {
     private val httpClient = OkHttpClient()
 
     private var tokenExpirationTime: Long = 0L
-    private lateinit var iamToken: String
+    private var iamToken: String = ""
 
     /*
      * Отправление запроса на сервер Yandex
@@ -73,7 +73,7 @@ class YandexChatConnector(val initConfig: InitConfig) {
      * Обновление IAM токена
      */
     private fun updateIamToken() {
-        if (tokenExpirationTime >= System.currentTimeMillis() || iamToken.isEmpty()) {
+        if (tokenExpirationTime >= System.currentTimeMillis() || iamToken.isNullOrEmpty()) {
             val newToken = getNewIamToken(initConfig.oauthToken)
             iamToken = newToken
             tokenExpirationTime = System.currentTimeMillis() + TOKEN_EXPIRATION_DURATION
