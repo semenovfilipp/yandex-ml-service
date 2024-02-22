@@ -26,7 +26,7 @@ class YandexGPTService(
     override val context: MlpExecutionContext
 ) : MlpPredictWithConfigServiceBase<ChatCompletionRequest, PredictConfig, ChatCompletionResult>(
     REQUEST_EXAMPLE,
-    PredictConfig(),
+    PREDICT_CONFIG_EXAMPLE,
     RESPONSE_EXAMPLE
 ) {
 
@@ -137,6 +137,12 @@ class YandexGPTService(
                     index = 11
                 )
             ),
+        )
+        val PREDICT_CONFIG_EXAMPLE = PredictConfig(
+            systemPrompt = "Верни ответ без гласных",
+            maxTokens = 2000,
+            temperature = 0.7,
+            stream = false,
         )
     }
 }
