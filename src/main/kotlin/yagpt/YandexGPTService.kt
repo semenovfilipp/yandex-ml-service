@@ -36,6 +36,26 @@ class YandexGPTService(
     private val connector = YandexChatConnector(initConfig)
 
     override fun predict(request: ChatCompletionRequest, config: PredictConfig?): ChatCompletionResult {
+
+        val messages = mutableListOf<YandexChatMessage>()
+        config?.systemPrompt?.let { systemPrompt ->
+            messages.add(
+                YandexChatMessage(
+                    role = "system",
+                    text = systemPrompt
+                )
+            )
+        }
+
+        request.messages.forEach { message ->
+            messages.add(
+                YandexChatMessage(
+                    role = message.role.toString(),
+                    text = message.content
+                )
+            )
+        }
+
         val yandexChatRequest = YandexChatRequest(
             modelUri = initConfig.modelUri,
             completionOptions = YandexChatCompletionOptions(
@@ -43,29 +63,25 @@ class YandexGPTService(
                 temperature = request.temperature ?: defaultPredictConfig.temperature,
                 stream = false
             ),
-            messages =
-                request.messages.map{message ->
-                    YandexChatMessage(
-                        role = message.role.toString(),
-                        text = message.content
-                    )
-                }
-//            messages =
-//            request.messages.map { message ->
-//                val role: String
-//                val text: String
-//                if (defaultPredictConfig.systemPrompt != null) {
-//                    role = ChatCompletionRole.system.toString()
-//                    text = defaultPredictConfig.systemPrompt
-//                } else {
-//                    role = ChatCompletionRole.user.toString()
-//                    text = message.content
+            messages =  messages
+//            if (config?.systemPrompt!=null){
+//                listOf(
+//                    YandexChatMessage(
+//                        role = "system",
+//                        text = config.systemPrompt
+//                    )
+//                )
+//            }else{
+//                emptyList<YandexChatMessage>() + request.messages.map { message ->
+//                    YandexChatMessage(
+//                        role = message.role.toString(),
+//                        text = message.content
+//                    )
 //                }
-//                YandexChatMessage(role = role, text = text)
 //            }
         )
 
-        val resultResponse = connector.sendMessageToYandex(yandexChatRequest)
+            val resultResponse = connector . sendMessageToYandex (yandexChatRequest)
 
         val choices = resultResponse.alternatives.mapIndexed { index, alternative ->
             val chatMessage = ChatMessage(
