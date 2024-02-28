@@ -73,7 +73,7 @@ class YandexChatConnector(val initConfig: InitConfig) {
      * Обновление IAM токена
      */
     private fun updateIamToken() {
-        if (tokenExpirationTime >= System.currentTimeMillis() || iamToken.isNullOrEmpty()) {
+        if (tokenExpirationTime >= System.currentTimeMillis() || iamToken.isEmpty()) {
             val newToken = getNewIamToken(initConfig.oauthToken)
             iamToken = newToken
             tokenExpirationTime = System.currentTimeMillis() + TOKEN_EXPIRATION_DURATION

@@ -38,13 +38,15 @@ class YandexGPTService(
     override fun predict(request: ChatCompletionRequest, config: PredictConfig?): ChatCompletionResult {
 
         val messages = mutableListOf<YandexChatMessage>()
-        config?.systemPrompt?.let { systemPrompt ->
-            messages.add(
-                YandexChatMessage(
-                    role = "system",
-                    text = systemPrompt
+        if (request.messages.find { it.role == ChatCompletionRole.system } == null) {
+            config?.systemPrompt?.let { systemPrompt ->
+                messages.add(
+                    YandexChatMessage(
+                        role = "system",
+                        text = systemPrompt
+                    )
                 )
-            )
+            }
         }
 
         request.messages.forEach { message ->
@@ -60,28 +62,13 @@ class YandexGPTService(
             modelUri = initConfig.modelUri,
             completionOptions = YandexChatCompletionOptions(
                 maxTokens = request.maxTokens ?: config?.maxTokens ?: defaultPredictConfig.maxTokens,
-                temperature = request.temperature ?: defaultPredictConfig.temperature,
+                temperature = request.temperature ?: config?.temperature ?: defaultPredictConfig.temperature,
                 stream = false
             ),
             messages =  messages
-//            if (config?.systemPrompt!=null){
-//                listOf(
-//                    YandexChatMessage(
-//                        role = "system",
-//                        text = config.systemPrompt
-//                    )
-//                )
-//            }else{
-//                emptyList<YandexChatMessage>() + request.messages.map { message ->
-//                    YandexChatMessage(
-//                        role = message.role.toString(),
-//                        text = message.content
-//                    )
-//                }
-//            }
         )
 
-            val resultResponse = connector . sendMessageToYandex (yandexChatRequest)
+        val resultResponse = connector.sendMessageToYandex(yandexChatRequest)
 
         val choices = resultResponse.alternatives.mapIndexed { index, alternative ->
             val chatMessage = ChatMessage(
@@ -96,10 +83,18 @@ class YandexGPTService(
             )
         }
 
-        val totalTokens = resultResponse.usage.totalTokens!!.toDouble()
-        val totalCost = (totalTokens * 1.0 * (0.40 / 1000.0)).toLong()
+        val totalTokens = resultResponse.usage.totalTokens!!.toLong()
 
-        BillingUnitsThreadLocal.setUnits(totalCost)
+        /**
+         * Стоимость за 1000 = 0.40 ₽
+         * коэффициент стоимости использования модели = 1.0 (тк у нас синхронный)
+         *
+         * (число токенов промпта + число токенов в ответе) × коэффициент стоимости использования модели × (стоимость за 1000 токенов / 1000)
+         */
+        val priceInMicroRoubles = totalTokens * 400 // (totalTokens * 1.0 * (0.40 / 1000.0))
+        val priceInNanoTokens = priceInMicroRoubles * 1000 * 50
+
+        BillingUnitsThreadLocal.setUnits(priceInNanoTokens)
 
         val usage = resultResponse.usage.inputTextTokens?.let {
             Usage(
@@ -109,8 +104,6 @@ class YandexGPTService(
             )
         }
         return ChatCompletionResult(
-            id = null,
-            `object` = null,
             created = System.currentTimeMillis(),
             model = resultResponse.modelVersion,
             choices = choices,
