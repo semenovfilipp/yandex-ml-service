@@ -1,9 +1,17 @@
 package yagpt
 
+import com.mlp.gate.PartialPredictResponseProto
+import com.mlp.gate.PayloadProto
+import com.mlp.gate.ServiceDescriptorProto
+import com.mlp.gate.ServiceToGateProto
 import com.mlp.sdk.*
 import com.mlp.sdk.datatypes.chatgpt.*
 import com.mlp.sdk.datatypes.chatgpt.Usage
 import com.mlp.sdk.utils.JSON
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import org.slf4j.MDC
 
 /*
  * Сервисные конфигурации для доступа к YandexGPT
@@ -22,68 +30,139 @@ data class PredictConfig(
     val stream: Boolean = false
 )
 
-class YandexGPTService(
-    override val context: MlpExecutionContext
-) : MlpPredictWithConfigServiceBase<ChatCompletionRequest, PredictConfig, ChatCompletionResult>(
-    REQUEST_EXAMPLE,
-    PREDICT_CONFIG_EXAMPLE,
-    RESPONSE_EXAMPLE
-) {
+class YandexGPTService : MlpService() {
 
     private val initConfig = JSON.parse(System.getenv()["SERVICE_CONFIG"] ?: "{}", InitConfig::class.java)
     private val defaultPredictConfig = PredictConfig()
-
     private val connector = YandexChatConnector(initConfig)
 
-    override fun predict(request: ChatCompletionRequest, config: PredictConfig?): ChatCompletionResult {
+    lateinit var sdk: MlpServiceSDK
+    private var connectorId: Long? = null
+    private var requestId: Long? = null
+    private var priceInNanoTokens: Long = 0L
 
-        val messages = mutableListOf<YandexChatMessage>()
-        config?.systemPrompt?.let { systemPrompt ->
-            messages.add(
-                YandexChatMessage(
-                    role = "system",
-                    text = systemPrompt
-                )
-            )
+
+    override fun predict(req: Payload, conf: Payload?): MlpPartialBinaryResponse {
+        val request = JSON.parse(req.data, ChatCompletionRequest::class.java)
+        val config = conf?.data?.let { JSON.parse(it, PredictConfig::class.java) }
+        val yandexChatRequest = createYandexChatRequest(request, config)
+
+        requestId = MDC.get("gateRequestId").toLong()
+        connectorId = MDC.get("connectorId").toLong()
+
+
+        return if (yandexChatRequest.completionOptions.stream){
+            predictAsync(yandexChatRequest)
+        }else{
+            predictSync(yandexChatRequest)
+        }
+    }
+
+
+    /*
+     * Асинхронная и синхронная функции для отправки сообщений
+     */
+    private fun predictAsync(yandexChatRequest: YandexChatRequest): MlpPartialBinaryResponse {
+        runBlocking {
+            connector.sendMessageToYandexAsync(yandexChatRequest) { yandexChatResponse ->
+
+                val athina = connector.sendLogsToAthina(yandexChatRequest,yandexChatResponse)
+
+
+                calculateCostForRequest(yandexChatResponse)
+                val chatCompletionResponse = createChatCompletionResult(yandexChatResponse)
+
+                val partitionProto = createPartialResponse(chatCompletionResponse)
+
+                println()
+                println("__________________________")
+                println(partitionProto)
+                println(athina)
+                println("__________________________")
+                println()
+
+                launch {
+                    sdk.send(connectorId!!, partitionProto)
+                }
+            }
+        }
+        return MlpPartialBinaryResponse()
+    }
+
+    private fun predictSync(yandexChatRequest: YandexChatRequest): MlpPartialBinaryResponse {
+        val yandexChatResponse = connector.sendMessageToYandex(yandexChatRequest)
+
+        val athinaResponse = connector.sendLogsToAthina(yandexChatRequest, yandexChatResponse)
+        val chatCompletionResult = createChatCompletionResult(yandexChatResponse)
+
+        isLastMessage = true
+        calculateCostForRequest(yandexChatResponse)
+        val partitionProto = createPartialResponse(chatCompletionResult)
+        isLastMessage = false
+
+        println()
+        println("__________________________")
+        println(partitionProto)
+        println(athinaResponse)
+        println("__________________________")
+        println()
+
+        GlobalScope.launch {
+            sdk.send(connectorId!!, partitionProto)
+            BillingUnitsThreadLocal.setUnits(priceInNanoTokens)
         }
 
-        request.messages.forEach { message ->
-            messages.add(
-                YandexChatMessage(
-                    role = message.role.toString(),
-                    text = message.content
-                )
-            )
+        return MlpPartialBinaryResponse()
+    }
+
+    /*
+ * Подсчет итоговой стоимости запроса
+ */
+    fun calculateCostForRequest(response: YandexChatResponse) {
+        // TODO Спросить как сделать по аналогии со Сбер и что такое 50
+/*        /*GigaChat Lite = 200*/ -> 0,2 рубля за 1000 токенов
+//        /*GigaChat Pro = 1500*/ -> 1,5 рубля за 1000 токенов
+//        val priceRubPerMillion = if (model == "GigaChat-Pro") 1500 else 200
+//        val priceInMicroRoubles = (totalTokens).toLong() * priceRubPerMillion
+           priceInNanoTokens = priceInMicroRoubles * 50 * 1000 -> что такое 50
+           https://developers.sber.ru/docs/ru/gigachat/api/tariffs -> тарифы сбера
+ */
+        if(isLastMessage) {
+            val totalTokens = (response.usage.totalTokens).toLong()
+            val modelCofficient = if (response.modelVersion.equals("YandexGPT")) 5.00 else 1.00
+            val pricePerToken = if (response.modelVersion.equals("YandexGPT")) 2.00 else 0.40
+            val totalCost = (totalTokens * modelCofficient * (pricePerToken / 1000.0)).toLong()
+
+            priceInNanoTokens = totalCost
+        }else{
+            priceInNanoTokens = 0L
         }
+    }
 
-        val yandexChatRequest = YandexChatRequest(
-            modelUri = initConfig.modelUri,
-            completionOptions = YandexChatCompletionOptions(
-                maxTokens = request.maxTokens ?: config?.maxTokens ?: defaultPredictConfig.maxTokens,
-                temperature = request.temperature ?: defaultPredictConfig.temperature,
-                stream = false
-            ),
-            messages =  messages
-//            if (config?.systemPrompt!=null){
-//                listOf(
-//                    YandexChatMessage(
-//                        role = "system",
-//                        text = config.systemPrompt
-//                    )
-//                )
-//            }else{
-//                emptyList<YandexChatMessage>() + request.messages.map { message ->
-//                    YandexChatMessage(
-//                        role = message.role.toString(),
-//                        text = message.content
-//                    )
-//                }
-//            }
-        )
+    /*
+     * Создаем объект для отправки в Caila
+     */
+    fun createPartialResponse(response: Any): ServiceToGateProto {
 
-            val resultResponse = connector . sendMessageToYandex (yandexChatRequest)
+        return ServiceToGateProto.newBuilder()
+            .setRequestId(requestId!!)
+            .setPartialPredict(
+                PartialPredictResponseProto.newBuilder()
+                    .setStart(isFirstMessage)
+                    .setFinish(isLastMessage)
+                    .setData(
+                        PayloadProto.newBuilder()
+                            .setJson(JSON.stringify(response))
+                            .setDataType("json")
+                    )
+            )
+            .putHeaders("Z-custom-billing", priceInNanoTokens.toString())
+            .build()
+    }
 
-        val choices = resultResponse.alternatives.mapIndexed { index, alternative ->
+
+    private fun createChatCompletionResult(yandexChatResponse: YandexChatResponse): ChatCompletionResult {
+        val choices = yandexChatResponse.alternatives.mapIndexed { index, alternative ->
             val chatMessage = ChatMessage(
                 role = ChatCompletionRole.assistant,
                 content = alternative.message.text
@@ -96,61 +175,71 @@ class YandexGPTService(
             )
         }
 
-        val totalTokens = resultResponse.usage.totalTokens!!.toDouble()
-        val totalCost = (totalTokens * 1.0 * (0.40 / 1000.0)).toLong()
 
-        BillingUnitsThreadLocal.setUnits(totalCost)
+        val usage = Usage(
+            promptTokens = yandexChatResponse.usage.inputTextTokens?.toLong() ?: 0L,
+            completionTokens = yandexChatResponse.usage.completionTokens?.toLong() ?: 0L,
+            totalTokens = yandexChatResponse.usage.totalTokens?.toLong() ?: 0L
+        )
 
-        val usage = resultResponse.usage.inputTextTokens?.let {
-            Usage(
-                promptTokens = resultResponse.usage.inputTextTokens.toLong(),
-                completionTokens = resultResponse.usage.completionTokens?.toLong() ?: 0L,
-                totalTokens = resultResponse.usage.totalTokens.toLong()
-            )
-        }
         return ChatCompletionResult(
             id = null,
             `object` = null,
             created = System.currentTimeMillis(),
-            model = resultResponse.modelVersion,
+            model = yandexChatResponse.modelVersion,
             choices = choices,
             usage = usage
         )
     }
 
-
-    companion object {
-        val REQUEST_EXAMPLE = ChatCompletionRequest(
-            messages = listOf(
-                ChatMessage(ChatCompletionRole.user, "What is Kotlin")
-
-            )
-        )
-        val RESPONSE_EXAMPLE = ChatCompletionResult(
-            model = "yandex-gpt-lite",
-            choices = listOf(
-                ChatCompletionChoice(
-                    message = ChatMessage(
-                        role = ChatCompletionRole.assistant,
-                        content = "Kotlin is an island"
-                    ),
-                    index = 11
-                )
+    private fun createYandexChatRequest(
+        request: ChatCompletionRequest,
+        config: PredictConfig?
+    ): YandexChatRequest {
+        return YandexChatRequest(
+            modelUri = initConfig.modelUri,
+            completionOptions = YandexChatCompletionOptions(
+                maxTokens = request.maxTokens ?: config?.maxTokens ?: defaultPredictConfig.maxTokens,
+                temperature = request.temperature ?: defaultPredictConfig.temperature,
+                stream = request.stream ?: defaultPredictConfig.stream
             ),
+            messages =
+            if (config?.systemPrompt != null) {
+                listOf(
+                    YandexChatMessage(
+                        role = "system",
+                        text = config.systemPrompt
+                    )
+                )
+            } else {
+                emptyList<YandexChatMessage>() + request.messages.map { message ->
+                    YandexChatMessage(
+                        role = message.role.toString(),
+                        text = message.content
+                    )
+                }
+            }
         )
-        val PREDICT_CONFIG_EXAMPLE = PredictConfig(
-            systemPrompt = "Верни ответ без гласных",
-            maxTokens = 2000,
-            temperature = 0.7,
-            stream = false,
-        )
+    }
+
+
+    /*
+     * Необходим для успешного запуска приложения
+     */
+    override fun getDescriptor(): ServiceDescriptorProto {
+
+        return ServiceDescriptorProto.newBuilder()
+            .setName("GigaChat")
+            .build()
     }
 }
 
 fun main() {
-    val actionSDK = MlpServiceSDK({ YandexGPTService(MlpExecutionContext.systemContext) })
+    val service = YandexGPTService()
+    val mlp = MlpServiceSDK(service)
+    service.sdk = mlp
 
-    actionSDK.start()
-    actionSDK.blockUntilShutdown()
+    mlp.start()
+    mlp.blockUntilShutdown()
 }
 
