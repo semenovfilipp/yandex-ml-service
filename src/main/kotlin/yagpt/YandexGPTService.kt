@@ -128,7 +128,7 @@ class YandexGPTService : MlpService() {
            https://developers.sber.ru/docs/ru/gigachat/api/tariffs -> тарифы сбера
  */
         if(isLastMessage) {
-            val totalTokens = (response.usage.totalTokens).toLong()
+            val totalTokens = (response.usage.totalTokens)?.toLong() ?: 0L
             val modelCofficient = if (response.modelVersion.equals("YandexGPT")) 5.00 else 1.00
             val pricePerToken = if (response.modelVersion.equals("YandexGPT")) 2.00 else 0.40
             val totalCost = (totalTokens * modelCofficient * (pricePerToken / 1000.0)).toLong()
@@ -165,7 +165,7 @@ class YandexGPTService : MlpService() {
         val choices = yandexChatResponse.alternatives.mapIndexed { index, alternative ->
             val chatMessage = ChatMessage(
                 role = ChatCompletionRole.assistant,
-                content = alternative.message.text
+                content = alternative.message.text ?: ""
             )
 
             ChatCompletionChoice(

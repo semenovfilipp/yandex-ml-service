@@ -49,7 +49,8 @@ data class YandexChatMessage(
 data class YandexChatResponse(val alternatives: List<Alternatives>, val usage: Usage, val modelVersion: String)
 data class Message(val role: String, val text: String)
 data class Alternatives(val message: Message, val status: String)
-data class Usage(val inputTextTokens: String, val completionTokens: String, val totalTokens: String)
+data class Usage(val inputTextTokens: String?, val completionTokens: String?, val totalTokens: String?)
+
 
 /*
  * Дата класс для запроса логирования Athina синхронный
@@ -64,6 +65,7 @@ data class Prompt(
     val role: String,
     val content: String
 )
+
 /*
  * Дата класс для получения ответа от Athina
  */
@@ -103,7 +105,13 @@ class YandexChatConnector(val initConfig: InitConfig) {
             throw IOException("Unexpected code ${response.code}")
         }
 
-        return JSON.parse(response.body!!.string(), YandexChatResponse::class.java)
+        val result = JSON.parse(response.body!!.string(), YandexChatResponse::class.java)
+        println()
+        println("________________")
+        println(result)
+        println("________________")
+        println()
+        return result
     }
 
     suspend fun sendMessageToYandexAsync(yandexReq: YandexChatRequest, callback: (YandexChatResponse) -> Unit) {
@@ -112,13 +120,15 @@ class YandexChatConnector(val initConfig: InitConfig) {
         val emptyResponse = YandexChatResponse(
             alternatives = listOf(
                 Alternatives(
-                    message = Message(
-                        role = "",
-                        text = ""
-                    ),
-                    status = ""
+                message = Message(
+                    role = "",
+                    text = ""
                 ),
+                status = ""
             ),
+            ),
+
+
             usage = Usage(
                 inputTextTokens = "",
                 totalTokens = "",
@@ -126,6 +136,7 @@ class YandexChatConnector(val initConfig: InitConfig) {
             ),
             modelVersion = ""
         )
+
 
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
@@ -168,7 +179,7 @@ class YandexChatConnector(val initConfig: InitConfig) {
         }
     }
 
-    fun sendLogsToAthina(request: YandexChatRequest,response: YandexChatResponse) : AthinaApiResponse{
+    fun sendLogsToAthina(request: YandexChatRequest, response: YandexChatResponse): AthinaApiResponse {
         val body = AthinaApiRequest(
             language_model_id = "",
             prompt = Prompt(
@@ -195,30 +206,30 @@ class YandexChatConnector(val initConfig: InitConfig) {
     /*
          * Обновление IAM токена
          */
-        private fun updateIamToken() {
-            if (tokenExpirationTime >= System.currentTimeMillis() || iamToken.isNullOrEmpty()) {
-                val newToken = getNewIamToken(initConfig.oauthToken)
-                iamToken = newToken
-                tokenExpirationTime = System.currentTimeMillis() + TOKEN_EXPIRATION_DURATION
-            }
-        }
-
-        /*
-         * Получение нового IAM токена
-         */
-        private fun getNewIamToken(oauthToken: String): String {
-            val requestBody = "{\"yandexPassportOauthToken\":\"$oauthToken\"}"
-            val request = Request.Builder()
-                .url("https://iam.api.cloud.yandex.net/iam/v1/tokens")
-                .post(requestBody.toRequestBody(MEDIA_TYPE_JSON))
-                .build()
-
-            val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw RuntimeException("Failed to retrieve new IAM token: ${response.code} - ${response.message}")
-            }
-
-            val responseData = response.body!!.string()
-            return JSON.parse(responseData)["iamToken"]!!.asText()
+    private fun updateIamToken() {
+        if (tokenExpirationTime >= System.currentTimeMillis() || iamToken.isNullOrEmpty()) {
+            val newToken = getNewIamToken(initConfig.oauthToken)
+            iamToken = newToken
+            tokenExpirationTime = System.currentTimeMillis() + TOKEN_EXPIRATION_DURATION
         }
     }
+
+    /*
+     * Получение нового IAM токена
+     */
+    private fun getNewIamToken(oauthToken: String): String {
+        val requestBody = "{\"yandexPassportOauthToken\":\"$oauthToken\"}"
+        val request = Request.Builder()
+            .url("https://iam.api.cloud.yandex.net/iam/v1/tokens")
+            .post(requestBody.toRequestBody(MEDIA_TYPE_JSON))
+            .build()
+
+        val response = httpClient.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw RuntimeException("Failed to retrieve new IAM token: ${response.code} - ${response.message}")
+        }
+
+        val responseData = response.body!!.string()
+        return JSON.parse(responseData)["iamToken"]!!.asText()
+    }
+}
