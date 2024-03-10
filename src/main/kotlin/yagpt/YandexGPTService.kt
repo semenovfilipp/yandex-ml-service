@@ -199,7 +199,7 @@ class YandexGPTService : MlpService() {
         return YandexChatRequest(
             modelUri = initConfig.modelUri,
             completionOptions = YandexChatCompletionOptions(
-                maxTokens = request.maxTokens ?: config?.maxTokens ?: defaultPredictConfig.maxTokens,
+                maxTokens = request.maxTokens ?:  defaultPredictConfig.maxTokens,
                 temperature = request.temperature ?: defaultPredictConfig.temperature,
                 stream = request.stream ?: defaultPredictConfig.stream
             ),
@@ -209,6 +209,10 @@ class YandexGPTService : MlpService() {
                     YandexChatMessage(
                         role = "system",
                         text = config.systemPrompt
+                    ),
+                    YandexChatMessage(
+                        role = request.messages.first().role.toString() ?: "user",
+                        text = request.messages.first().content
                     )
                 )
             } else {

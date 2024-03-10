@@ -49,7 +49,7 @@ data class YandexChatMessage(
 data class YandexChatResponse(val alternatives: List<Alternatives>, val usage: Usage, val modelVersion: String)
 data class Message(val role: String, val text: String)
 data class Alternatives(val message: Message, val status: String)
-data class Usage(val inputTextTokens: String?, val completionTokens: String?, val totalTokens: String?)
+data class Usage(val inputTextTokens: Int?, val completionTokens: Int?, val totalTokens: Int?)
 
 
 /*
@@ -95,6 +95,7 @@ class YandexChatConnector(val initConfig: InitConfig) {
 
         val request = Request.Builder()
             .url(URL_YANDEX_COMPLETION)
+            .header("Content-Type","application/json")
             .header("Authorization", "Bearer $iamToken")
             .header("x-folder-id", initConfig.xFolderId)
             .post(JSON.stringify(yandexReq).toRequestBody(MEDIA_TYPE_JSON))
@@ -105,13 +106,23 @@ class YandexChatConnector(val initConfig: InitConfig) {
             throw IOException("Unexpected code ${response.code}")
         }
 
-        val result = JSON.parse(response.body!!.string(), YandexChatResponse::class.java)
-        println()
-        println("________________")
-        println(result)
-        println("________________")
-        println()
-        return result
+//        val mockResponse = YandexChatResponse(
+//            alternatives = listOf(
+//                Alternatives(
+//                    message = Message(
+//                        role = "assistant",
+//                        text = "Привет, я бот от Яндекса. Как я могу вам помочь?"
+//                    ),
+//                    status = "good"
+//                ),
+//            ),
+//            usage = Usage(
+//                inputTextTokens = 10, completionTokens = 10, totalTokens = 20)
+//        ,
+//            modelVersion = "Yandex-Lite"
+//        )
+
+        return  JSON.parse(response.body!!.string(), YandexChatResponse::class.java)
     }
 
     suspend fun sendMessageToYandexAsync(yandexReq: YandexChatRequest, callback: (YandexChatResponse) -> Unit) {
@@ -120,23 +131,20 @@ class YandexChatConnector(val initConfig: InitConfig) {
         val emptyResponse = YandexChatResponse(
             alternatives = listOf(
                 Alternatives(
-                message = Message(
-                    role = "",
-                    text = ""
+                    message = Message(
+                        role = "",
+                        text = ""
+                    ),
+                    status = ""
                 ),
-                status = ""
             ),
-            ),
-
-
             usage = Usage(
-                inputTextTokens = "",
-                totalTokens = "",
-                completionTokens = ""
+                inputTextTokens = 1,
+                totalTokens = 1,
+                completionTokens = 1
             ),
             modelVersion = ""
         )
-
 
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
@@ -155,11 +163,14 @@ class YandexChatConnector(val initConfig: InitConfig) {
                     override fun onResponse(call: Call, response: Response) {
                         try {
                             if (response.isSuccessful) {
-                                val result =
-                                    JSON.parse(response.body!!.string(), YandexChatResponse::class.java)
-
-                                isFirstMessage = count == 0
-                                count++
+                                val result = JSON.parse(response.body!!.string(), YandexChatResponse::class.java)
+                                if(count==0) {
+                                    isFirstMessage = true
+                                    count++
+                                } else{
+                                    isFirstMessage = false
+                                    count++
+                                }
                                 callback.invoke(result)
                             } else {
                                 isLastMessage = true
@@ -168,16 +179,17 @@ class YandexChatConnector(val initConfig: InitConfig) {
                         } catch (e: IOException) {
                             callback.invoke(emptyResponse)
                         }
-                        isLastMessage = false
-                        isFirstMessage = false
-                        count = 0
                     }
                 })
             } catch (e: Exception) {
                 callback.invoke(emptyResponse)
             }
+            isFirstMessage = false
+            isLastMessage = false
+            count = 0
         }
     }
+
 
     fun sendLogsToAthina(request: YandexChatRequest, response: YandexChatResponse): AthinaApiResponse {
         val body = AthinaApiRequest(
